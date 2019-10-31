@@ -302,9 +302,9 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
     // Save each read result iff record exists in storage.
     Value result;
+    Key key = *it;
+    storage_->Lock(key);
     if (storage_->Read(*it, &result, next_unique_id_)) {
-      Key key = *it;
-      storage_->Lock(key);
       txn->reads_[*it] = result;
     }
   }
@@ -312,9 +312,9 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
     // Save each read result iff record exists in storage.
     Value result;
+    Key key = *it;
+    storage_->Lock(key);
     if (storage_->Read(*it, &result)) {
-      Key key = *it;
-      storage_->Lock(key);
       txn->reads_[*it] = result;
     }
   }
@@ -343,7 +343,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
 
 bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
   for (map<Key, Value>::iterator it = txn->writes_.begin(); it != txn->writes_.end(); ++it) {
-    if (storage_->CheckWrite(it->first, txn->unique_id_)) {
+    if (!storage_->CheckWrite(it->first, txn->unique_id_)) {
       return false;
     }
   }
@@ -352,21 +352,15 @@ bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
 
 void TxnProcessor::MVCCLockWriteKeys(Txn* txn) {
   for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
-  Value result;
-    if (storage_->Read(*it, &result)) {
-      Key key = *it;
-      storage_->Lock(key);
-    }
+    Key key = *it;
+    storage_->Lock(key);
   }
 }
 
 void TxnProcessor::MVCCUnlockWriteKeys(Txn* txn) {
   for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
-  Value result;
-    if (storage_->Read(*it, &result)) {
-      Key key = *it;
-      storage_->Unlock(key);
-    }
+    Key key = *it;
+    storage_->Unlock(key);
   }
 }
 
