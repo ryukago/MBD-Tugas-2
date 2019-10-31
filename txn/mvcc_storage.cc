@@ -51,6 +51,9 @@ bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
   int max_version = 0;
 
   if (mvcc_data_.count(key)) {
+    if ((*mvcc_data_[key]->begin())->version_id_ > txn_unique_id) { 
+      return false;
+    }
     for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
       if ((max_version < (*it)->version_id_) && ((*it)->version_id_ == txn_unique_id)) {
         max_version = (*it)->version_id_;
