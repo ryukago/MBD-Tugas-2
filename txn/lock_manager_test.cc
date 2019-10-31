@@ -1,5 +1,4 @@
-// Author: Alexander Thomson (thomson@cs.yale.edu)
-// Modified by: Kun Ren (kun.ren@yale.edu)
+
 
 #include "txn/lock_manager.h"
 

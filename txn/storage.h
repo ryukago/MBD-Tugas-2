@@ -1,5 +1,3 @@
-// Author: Alexander Thomson (thomson@cs.yale.edu)
-// Modified by: Kun Ren (kun.ren@yale.edu)
 
 #ifndef _STORAGE_H_
 #define _STORAGE_H_

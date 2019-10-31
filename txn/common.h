@@ -1,4 +1,3 @@
-// Author: Alexander Thomson (thomson@cs.yale.edu)
 
 #ifndef _COMMON_H_
 #define _COMMON_H_

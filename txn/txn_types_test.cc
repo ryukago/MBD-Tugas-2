@@ -1,4 +1,3 @@
-// Author: Alexander Thomson (thomson@cs.yale.edu)
 
 #include "txn/txn.h"
 

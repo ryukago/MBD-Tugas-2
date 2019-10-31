@@ -1,4 +1,3 @@
-// Author: Kun Ren (kun.ren@yale.edu)
 
 #ifndef _MVCC_STORAGE_H_
 #define _MVCC_STORAGE_H_

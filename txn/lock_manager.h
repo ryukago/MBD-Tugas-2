@@ -1,6 +1,4 @@
-// Author: Alexander Thomson (thomson@cs.yale.edu)
-// Modified by: Kun Ren (kun.ren@yale.edu)
-//
+
 // Interface for lock managers in the system.
 
 #ifndef _LOCK_MANAGER_H_
@@ -30,7 +28,7 @@ enum LockMode {
 
 class LockManager {
  public:
-  virtual ~LockManager();
+  virtual ~LockManager() {}
 
   // Attempts to grant a read lock to the specified transaction, enqueueing
   // request in lock table. Returns true if lock is immediately granted, else
@@ -110,11 +108,6 @@ class LockManager {
   // 'txn_waits_' are invalided by any call to Release() with the entry's
   // txn.
   unordered_map<Txn*, int> txn_waits_;
-
-  /**
-   * Get the lock queue for key, creating it if it doesn't exist.
-   */
-  deque<LockRequest>* _getLockQueue(const Key& key);
 };
 
 // Version of the LockManager implementing ONLY exclusive locks.
@@ -139,19 +132,6 @@ class LockManagerB : public LockManager {
   virtual bool WriteLock(Txn* txn, const Key& key);
   virtual void Release(Txn* txn, const Key& key);
   virtual LockMode Status(const Key& key, vector<Txn*>* owners);
- private:
-  /**
-   * Returns `false` if no exclusive lock is in the lock queue for `key`.
-   */
-
-  /**
-   * Maintains counts of the number of exclusive locks in lock_table_
-   * for each key.
-   */
-  unordered_map<Key, uint64_t> _numExclusiveWaiting;
-
-  bool _addLock(LockMode mode, Txn* txn, const Key& key);
-  bool _noExclusiveWaiting(const Key& key);
 };
 
 #endif  // _LOCK_MANAGER_H_
