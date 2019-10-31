@@ -103,4 +103,13 @@ void MVCCStorage::Write(Key key, Value value, int txn_unique_id) {
   // into the version_lists. Note that InitStorage() also calls this method to init storage.
   // Note that you don't have to call Lock(key) in this method, just
   // call Lock(key) before you call this method and call Unlock(key) afterward.
+
+  if (mvcc_data_.count(key)) {
+    Version newVersion = {0};
+    newVersion.value_ = value;
+    newVersion.max_read_id_ = 0;
+    newVersion.version_id_ = txn_unique_id;
+
+    (*mvcc_data_[key]).push_back(&newVersion);
+  }
 }
