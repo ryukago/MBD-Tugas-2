@@ -39,6 +39,16 @@ void MVCCStorage::Unlock(Key key) {
   mutexs_[key]->Unlock();
 }
 
+int MVCCStorage::SearchMaxVersion(Key key, int txn_unique_id) {
+  int max_version = 0;
+  for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
+    if ((max_version < (*it)->version_id_) && ((*it)->version_id_ <= txn_unique_id)) {
+      max_version = (*it)->version_id_;
+    }
+  }
+  return max_version;
+}
+
 // MVCC Read
 bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
   // CPSC 438/538:
@@ -47,15 +57,8 @@ bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
 
   // Hint: Iterate the version_lists and return the verion whose write timestamp
   // (version_id) is the largest write timestamp less than or equal to txn_unique_id.
-
-  int max_version = 0;
-
   if (mvcc_data_.count(key)) {
-    for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
-      if ((max_version < (*it)->version_id_) && ((*it)->version_id_ <= txn_unique_id)) {
-        max_version = (*it)->version_id_;
-      }
-    }
+    int max_version = SearchMaxVersion(key, txn_unique_id);
 		for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
       if (max_version == (*it)->version_id_) {
 				if (txn_unique_id > (*it)->max_read_id_) {
@@ -70,30 +73,25 @@ bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
   return false;
 }
 
-
 // Check whether apply or abort the write
 bool MVCCStorage::CheckWrite(Key key, int txn_unique_id) {
   if (mvcc_data_.count(key)) {
     if (!mvcc_data_[key]->empty()) {
-
-      deque<Version*>::iterator max_version = mvcc_data_[key]->begin();
+      int max_version = SearchMaxVersion(key, txn_unique_id);
 
       for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
-        if (((*max_version)->version_id_ < (*it)->version_id_) && ((*it)->version_id_ <= txn_unique_id)) {
-          max_version = it;
+        if (max_version == (*it)->version_id_) {
+  				if (txn_unique_id < (*it)->max_read_id_) {
+            return false;
+  				}
         }
       }
-
-      if ((*(*max_version)--).max_read_id_ <= txn_unique_id) {
-        return true;
-      } else {
-        return false;
-      }
+      return true;
     } else {
-      return false;
+      return true;
     }
   } else {
-    return false;
+    return true;
   }
 }
 
@@ -107,13 +105,32 @@ void MVCCStorage::Write(Key key, Value value, int txn_unique_id) {
   // into the version_lists. Note that InitStorage() also calls this method to init storage.
   // Note that you don't have to call Lock(key) in this method, just
   // call Lock(key) before you call this method and call Unlock(key) afterward.
-
-  if (mvcc_data_.count(key)) {
-    Version newVersion = {0};
-    newVersion.value_ = value;
-    newVersion.max_read_id_ = 0;
-    newVersion.version_id_ = txn_unique_id;
-
-    (*mvcc_data_[key]).push_back(&newVersion);
-  }
+	if (CheckWrite(key, txn_unique_id)) {
+		if (mvcc_data_.count(key)) {
+	    int max_version = SearchMaxVersion(key, txn_unique_id);
+	    if (max_version == txn_unique_id) {
+	      for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
+	        if (max_version == (*it)->version_id_) {
+						(*it)->value_ = value;
+					}
+	      }
+	    }
+	    else {
+	        Version* newVersion = new Version;
+	        newVersion->value_ = value;
+	        newVersion->max_read_id_ = txn_unique_id;
+	        newVersion->version_id_ = txn_unique_id;
+	        (mvcc_data_[key])->push_back(newVersion);
+	    }
+	  }
+	  else {
+	    deque<Version*> *deq = new std::deque<Version*>;
+	    mvcc_data_[key] = deq;
+	    Version* newVersion = new Version;
+	    newVersion->value_ = value;
+	    newVersion->max_read_id_ = txn_unique_id;
+	    newVersion->version_id_ = txn_unique_id;
+	    (mvcc_data_[key])->push_back(newVersion);
+	  }
+	}
 }
