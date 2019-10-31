@@ -314,9 +314,10 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
        it != txn->writeset_.end(); ++it) {
     // Save each read result iff record exists in storage.
     Value result;
-    if (storage_->Read(*it, &result))
+    if (storage_->Read(*it, &result)) {
       lock.WriteLock(txn, it);
       txn->reads_[*it] = result;
+    }
   }
 
   // Execute the transaction logic (i.e. call Run() on the transaction)
@@ -348,13 +349,13 @@ void TxnProcessor::GarbageCollection() {
 
 }
 
-void TxnProcessor::CleanupTxn() {
+void TxnProcessor::CleanupTxn(Txn* txn) {
   txn->reads_.empty();
   txn->writes_.empty();
   txn->status_ = INCOMPLETE;
 }
 
-void TxnProcessor::RestartTxn() {
+void TxnProcessor::RestartTxn(Txn* txn) {
   mutex_.Lock();
   txn->unique_id_ = next_unique_id_;
   next_unique_id_++;
