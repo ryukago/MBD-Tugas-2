@@ -101,9 +101,9 @@ class TxnProcessor {
 
   void GarbageCollection();
 
-  void CleanupTxn();
+  void CleanupTxn(Txn* txn);
 
-  void RestartTxn();
+  void RestartTxn(Txn* txn);
 
   // Concurrency control mechanism the TxnProcessor is currently using.
   CCMode mode_;
