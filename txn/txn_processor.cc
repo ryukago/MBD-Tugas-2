@@ -313,7 +313,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     // Save each read result iff record exists in storage.
     Value result;
     if (storage_->Read(*it, &result))
-      txn->reads_[*it].Lock();
+      WriteLock(txn, it);
       txn->reads_[*it] = result;
   }
 
@@ -328,6 +328,22 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   //   Release all locks for keys in the write_set_
   //   Cleanup txn
   //   Completely restart the transaction.
+}
+
+bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
+  return true;
+}
+
+void TxnProcessor::MVCCLockWriteKeys(Txn* txn) {
+
+}
+
+void TxnProcessor::MVCCUnlockWriteKeys(Txn* txn) {
+
+}
+
+void TxnProcessor::GarbageCollection() {
+
 }
 
 void TxnProcessor::CleanupTxn() {
