@@ -14,14 +14,14 @@ TxnProcessor::TxnProcessor(CCMode mode)
     lm_ = new LockManagerA(&ready_txns_);
   else if (mode_ == LOCKING)
     lm_ = new LockManagerB(&ready_txns_);
-  
+
   // Create the storage
   if (mode_ == MVCC) {
     storage_ = new MVCCStorage();
   } else {
     storage_ = new Storage();
   }
-  
+
   storage_->InitStorage();
 
   // Start 'RunScheduler()' running.
@@ -31,11 +31,11 @@ TxnProcessor::TxnProcessor(CCMode mode)
   CPU_ZERO(&cpuset);
   for (int i = 0;i < 7;i++) {
     CPU_SET(i, &cpuset);
-  } 
+  }
   pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
   pthread_t scheduler_;
   pthread_create(&scheduler_, &attr, StartScheduler, reinterpret_cast<void*>(this));
-  
+
 }
 
 void* TxnProcessor::StartScheduler(void * arg) {
@@ -46,7 +46,7 @@ void* TxnProcessor::StartScheduler(void * arg) {
 TxnProcessor::~TxnProcessor() {
   if (mode_ == LOCKING_EXCLUSIVE_ONLY || mode_ == LOCKING)
     delete lm_;
-    
+
   delete storage_;
 }
 
@@ -130,7 +130,7 @@ void TxnProcessor::RunLockingScheduler() {
           }
         }
       }
-          
+
       if (blocked == false) {
         // Request write locks.
         for (set<Key>::iterator it = txn->writeset_.begin();
@@ -165,7 +165,7 @@ void TxnProcessor::RunLockingScheduler() {
         txn->unique_id_ = next_unique_id_;
         next_unique_id_++;
         txn_requests_.Push(txn);
-        mutex_.Unlock(); 
+        mutex_.Unlock();
       }
     }
 
@@ -181,7 +181,7 @@ void TxnProcessor::RunLockingScheduler() {
         // Invalid TxnStatus!
         DIE("Completed Txn has invalid TxnStatus: " << txn->Status());
       }
-      
+
       // Release read locks.
       for (set<Key>::iterator it = txn->readset_.begin();
            it != txn->readset_.end(); ++it) {
@@ -278,12 +278,68 @@ void TxnProcessor::RunOCCParallelScheduler() {
 void TxnProcessor::RunMVCCScheduler() {
   //
   // Implement this method!
-  
-  // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute. 
-  // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn. 
+
+  // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute.
+  // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn.
   //
   // [For now, run serial scheduler in order to make it through the test
   // suite]
+  Txn* txn;
+
+  while (tp_.Active()) {
+    if (txn_requests_.Pop(&txn)) {
+      NewTxnRequest(&txn);
+      MVCCExecuteTxn(txn);
+    }
+    //Get the next new transaction request (if one is pending) and pass it to an execution thread.
+  }
+
   RunSerialScheduler();
 }
 
+void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
+  // Read all necessary data for this transaction from storage (Note that you should lock the key before each read)
+  for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
+    // Save each read result iff record exists in storage.
+    Value result;
+    if (storage_->Read(*it, &result)) {
+      ReadLock(txn, it);
+      txn->reads_[*it] = result;
+    }
+  }
+
+  for (set<Key>::iterator it = txn->writeset_.begin();
+       it != txn->writeset_.end(); ++it) {
+    // Save each read result iff record exists in storage.
+    Value result;
+    if (storage_->Read(*it, &result))
+      txn->reads_[*it].Lock();
+      txn->reads_[*it] = result;
+  }
+
+  // Execute the transaction logic (i.e. call Run() on the transaction)
+
+  // Acquire all locks for keys in the write_set_
+  // Call MVCCStorage::CheckWrite method to check all keys in the write_set_
+  // If (each key passed the check)
+  //   Apply the writes
+  //   Release all locks for keys in the write_set_
+  // else if (at least one key failed the check)
+  //   Release all locks for keys in the write_set_
+  //   Cleanup txn
+  //   Completely restart the transaction.
+}
+
+void TxnProcessor::CleanupTxn() {
+  txn->reads_.empty();
+  txn->writes_.empty();
+  txn->status_ = INCOMPLETE;
+}
+
+void TxnProcessor::RestartTxn() {
+  mutex_.Lock();
+  txn->unique_id_ = next_unique_id_;
+  next_unique_id_++;
+  txn_requests_.Push(txn);
+  mutex_.Unlock();
+}
