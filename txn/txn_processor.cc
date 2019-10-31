@@ -288,7 +288,7 @@ void TxnProcessor::RunMVCCScheduler() {
 
   while (tp_.Active()) {
     if (txn_requests_.Pop(&txn)) {
-      NewTxnRequest(&txn);
+      NewTxnRequest(txn);
       MVCCExecuteTxn(txn);
     }
     //Get the next new transaction request (if one is pending) and pass it to an execution thread.
@@ -298,12 +298,14 @@ void TxnProcessor::RunMVCCScheduler() {
 }
 
 void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
+
+  LockManager lock = new LockManagerA(&txn);
   // Read all necessary data for this transaction from storage (Note that you should lock the key before each read)
   for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
     // Save each read result iff record exists in storage.
     Value result;
     if (storage_->Read(*it, &result)) {
-      ReadLock(txn, it);
+      lock.ReadLock(txn, it);
       txn->reads_[*it] = result;
     }
   }
@@ -313,7 +315,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     // Save each read result iff record exists in storage.
     Value result;
     if (storage_->Read(*it, &result))
-      WriteLock(txn, it);
+      lock.WriteLock(txn, it);
       txn->reads_[*it] = result;
   }
 
