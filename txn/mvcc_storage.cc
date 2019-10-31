@@ -1,7 +1,7 @@
 // Author: Kun Ren (kun.ren@yale.edu)
 // Modified by Daniel Abadi
 
-#include "txn/mvcc_storage.h"
+#include "mvcc_storage.h"
 
 // Init the storage
 void MVCCStorage::InitStorage() {
@@ -51,22 +51,23 @@ bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
   int max_version = 0;
 
   if (mvcc_data_.count(key)) {
-    if ((*mvcc_data_[key]->begin())->version_id_ > txn_unique_id) { 
-      return false;
-    }
     for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
-      if ((max_version < (*it)->version_id_) && ((*it)->version_id_ == txn_unique_id)) {
+      if ((max_version < (*it)->version_id_) && ((*it)->version_id_ <= txn_unique_id)) {
         max_version = (*it)->version_id_;
       }
     }
-  }
-  else {
-    return false;
+		for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
+      if (max_version == (*it)->version_id_) {
+				if (txn_unique_id > (*it)->max_read_id_) {
+					(*it)->max_read_id_ = txn_unique_id;
+				}
+				*result = (*it)->value_;
+				return true;
+      }
+    }
   }
 
-  *result = max_version;
-
-  return true;
+  return false;
 }
 
 
@@ -74,9 +75,9 @@ bool MVCCStorage::Read(Key key, Value* result, int txn_unique_id) {
 bool MVCCStorage::CheckWrite(Key key, int txn_unique_id) {
   if (mvcc_data_.count(key)) {
     if (!mvcc_data_[key]->empty()) {
-      
+
       deque<Version*>::iterator max_version = mvcc_data_[key]->begin();
-      
+
       for (deque<Version*>::iterator it = mvcc_data_[key]->begin(); it != mvcc_data_[key]->end(); ++it) {
         if (((*max_version)->version_id_ < (*it)->version_id_) && ((*it)->version_id_ <= txn_unique_id)) {
           max_version = it;
