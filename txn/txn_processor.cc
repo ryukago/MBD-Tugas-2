@@ -307,6 +307,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     if (storage_->Read(*it, &result, next_unique_id_)) {
       txn->reads_[*it] = result;
     }
+    storage_->Unlock(key);
   }
 
   for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
@@ -314,9 +315,10 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     Value result;
     Key key = *it;
     storage_->Lock(key);
-    if (storage_->Read(*it, &result)) {
+    if (storage_->Read(*it, &result, next_unique_id_)) {
       txn->reads_[*it] = result;
     }
+    storage_->Unlock(key);
   }
 
   // Execute the transaction logic (i.e. call Run() on the transaction)
