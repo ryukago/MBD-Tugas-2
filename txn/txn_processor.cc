@@ -355,63 +355,57 @@ void TxnProcessor::RunMVCCScheduler() {
 }
 
 void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
-
   // Read all necessary data for this transaction from storage (Note that you should lock the key before each read)
-  for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
-    // Save each read result iff record exists in storage.
+  for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) { 
     Value result;
-    Key key = *it;
-    storage_->Lock(key);
+    storage_->Lock(*it);
     if (storage_->Read(*it, &result, txn->unique_id_)) {
+      // Save each read result iff record exists in storage.
       txn->reads_[*it] = result;
     }
-    storage_->Unlock(key);
-  }
-
-  for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
-    // Save each read result iff record exists in storage.
-    Value result;
-    Key key = *it;
-    storage_->Lock(key);
-    if (storage_->Read(*it, &result, txn->unique_id_)) {
-      txn->reads_[*it] = result;
-    }
-    storage_->Unlock(key);
+    storage_->Unlock(*it);
   }
 
   // Execute the transaction logic (i.e. call Run() on the transaction)
   txn->Run();
 
   // Acquire all locks for keys in the write_set_
-  // Call MVCCStorage::CheckWrite method to check all keys in the write_set_
-  // If (each key passed the check)
-  //   Apply the writes
-  //   Release all locks for keys in the write_set_
-  // else if (at least one key failed the check)
-  //   Release all locks for keys in the write_set_
-  //   Cleanup txn
-  //   Completely restart the transaction.
-
   for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
-    if (MVCCCheckWrites(txn)) {
-      ApplyWrites(txn);
-      // Release all write locks that already acquired
-      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
-        lm_->Release(txn, *it_writes);
-      }
+    storage_->Lock(*it);
+  }
+  
+  // Call MVCCStorage::CheckWrite method to check all keys in the write_set_
+  bool pass = true;
+  for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
+    if (!storage_->CheckWrite(*it, txn->unique_id_)) {
+      pass = false;
     }
-    else {
-      // Release all write locks that already acquired
-      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
-        lm_->Release(txn, *it_writes);
-      }
-      CleanupTxn(txn);
-      RestartTxn(txn);
+  }
+
+  // If (each key passed the check)
+  if (pass) {
+    // Apply the writes
+    ApplyWrites(txn);
+    // Release all locks for keys in the write_set_    
+    for (set<Key>::iterator it = txn->writeset_.begin(); true; ++it) {
+      storage_->Unlock(*it);
     }
+  }
+  // else if (at least one key failed the check)
+  else {
+    // Release all locks for keys in the write_set_
+    for (set<Key>::iterator it = txn->writeset_.begin(); true; ++it) {
+      storage_->Unlock(*it);
+    }
+
+    // Cleanup txn
+    CleanupTxn(txn);
+    // Completely restart the transaction
+    RestartTxn(txn);
   }
 }
 
-bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
+/*bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
   for (map<Key, Value>::iterator it = txn->writes_.begin(); it != txn->writes_.end(); ++it) {
     if (!storage_->CheckWrite(it->first, txn->unique_id_)) {
       return false;
@@ -432,7 +426,7 @@ void TxnProcessor::MVCCUnlockWriteKeys(Txn* txn) {
     Key key = *it;
     storage_->Unlock(key);
   }
-}
+}*/
 
 void TxnProcessor::GarbageCollection() {
 
