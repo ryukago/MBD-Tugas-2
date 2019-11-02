@@ -278,22 +278,18 @@ void TxnProcessor::RunOCCParallelScheduler() {
 void TxnProcessor::RunMVCCScheduler() {
   //
   // Implement this method!
-
   // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute.
   // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn.
-  //
-  // [For now, run serial scheduler in order to make it through the test
-  // suite]
   Txn* txn;
 
   while (tp_.Active()) {
     if (txn_requests_.Pop(&txn)) {
-      MVCCExecuteTxn(txn);
+      tp_.RunTask(new Method<TxnProcessor, void, Txn*>(
+            this,
+            &TxnProcessor::MVCCExecuteTxn,
+            txn));
     }
-    //Get the next new transaction request (if one is pending) and pass it to an execution thread.
   }
-
-  // RunSerialScheduler();
 }
 
 void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
@@ -304,7 +300,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     Value result;
     Key key = *it;
     storage_->Lock(key);
-    if (storage_->Read(*it, &result, next_unique_id_)) {
+    if (storage_->Read(*it, &result, txn->unique_id_)) {
       txn->reads_[*it] = result;
     }
     storage_->Unlock(key);
@@ -315,7 +311,7 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
     Value result;
     Key key = *it;
     storage_->Lock(key);
-    if (storage_->Read(*it, &result, next_unique_id_)) {
+    if (storage_->Read(*it, &result, txn->unique_id_)) {
       txn->reads_[*it] = result;
     }
     storage_->Unlock(key);
@@ -325,8 +321,6 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   txn->Run();
 
   // Acquire all locks for keys in the write_set_
-  MVCCLockWriteKeys(txn);
-
   // Call MVCCStorage::CheckWrite method to check all keys in the write_set_
   // If (each key passed the check)
   //   Apply the writes
@@ -336,10 +330,22 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   //   Cleanup txn
   //   Completely restart the transaction.
 
-  if (MVCCCheckWrites(txn)) {
-    MVCCUnlockWriteKeys(txn);
-    CleanupTxn(txn);
-    RestartTxn(txn);
+  for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
+    if (MVCCCheckWrites(txn)) {
+      ApplyWrites(txn);
+      // Release all write locks that already acquired
+      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
+        lm_->Release(txn, *it_writes);
+      }
+    }
+    else {
+      // Release all write locks that already acquired
+      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
+        lm_->Release(txn, *it_writes);
+      }
+      CleanupTxn(txn);
+      RestartTxn(txn);
+    }
   }
 }
 
