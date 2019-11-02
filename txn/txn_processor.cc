@@ -281,7 +281,6 @@ void TxnProcessor::RunMVCCScheduler() {
   // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute.
   // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn.
   Txn* txn;
-
   while (tp_.Active()) {
     if (txn_requests_.Pop(&txn)) {
       tp_.RunTask(new Method<TxnProcessor, void, Txn*>(
@@ -289,6 +288,29 @@ void TxnProcessor::RunMVCCScheduler() {
             &TxnProcessor::MVCCExecuteTxn,
             txn));
     }
+    MVCCExecuteFinishedTxn();
+  }
+
+}
+
+void TxnProcessor::MVCCExecuteFinishedTxn() {
+  Txn* txn;
+  while (completed_txns_.Pop(&txn)) {
+    MVCCLockWriteKeys(txn);
+    if (MVCCCheckWrites(txn)) {
+      ApplyWrites(txn);
+      // Release all write locks that already acquired
+      MVCCUnlockWriteKeys(txn);
+      txn->status_ = COMMITTED;
+    }
+    else {
+      // Release all write locks that already acquired
+      MVCCUnlockWriteKeys(txn);
+      txn->status_ = INCOMPLETE;
+      CleanupTxn(txn);
+      RestartTxn(txn);
+    }
+    txn_results_.Push(txn);
   }
 }
 
@@ -320,33 +342,8 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   // Execute the transaction logic (i.e. call Run() on the transaction)
   txn->Run();
 
-  // Acquire all locks for keys in the write_set_
-  // Call MVCCStorage::CheckWrite method to check all keys in the write_set_
-  // If (each key passed the check)
-  //   Apply the writes
-  //   Release all locks for keys in the write_set_
-  // else if (at least one key failed the check)
-  //   Release all locks for keys in the write_set_
-  //   Cleanup txn
-  //   Completely restart the transaction.
-
-  for (set<Key>::iterator it = txn->writeset_.begin(); it != txn->writeset_.end(); ++it) {
-    if (MVCCCheckWrites(txn)) {
-      ApplyWrites(txn);
-      // Release all write locks that already acquired
-      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
-        lm_->Release(txn, *it_writes);
-      }
-    }
-    else {
-      // Release all write locks that already acquired
-      for (set<Key>::iterator it_writes = txn->writeset_.begin(); true; ++it_writes) {
-        lm_->Release(txn, *it_writes);
-      }
-      CleanupTxn(txn);
-      RestartTxn(txn);
-    }
-  }
+  // Hand the txn back to the RunScheduler thread.
+  completed_txns_.Push(txn);
 }
 
 bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
