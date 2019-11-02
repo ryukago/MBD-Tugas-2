@@ -56,7 +56,13 @@ LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
         owners->push_back(req->at(i).txn_);
     }
 
-    return req->at(0).mode_;
+    for (unsigned int i = 0; i < req->size(); i++) {
+        if (req->at(i).mode_ == EXCLUSIVE) {
+            if (i == 0) return EXCLUSIVE;
+            else return UNLOCKED;
+        }
+    }
+    return UNLOCKED;
 }
 
 LockManagerB::LockManagerB(deque<Txn*>* ready_txns) {
