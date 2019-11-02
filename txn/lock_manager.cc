@@ -9,19 +9,28 @@ LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
-    deque<LockRequest> *d = new deque<LockRequest>;
+    // Search if key has been added to table
+    if (lock_table_.find(key) == lock_table_.end()) { // not found
+        deque<LockRequest> *d = new deque<LockRequest>;
 
-    /* LockRequest req(EXCLUSIVE, txn); */
-    /* d->push_back(req); */
+        lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+    }
+
     LockRequest* req = new LockRequest(EXCLUSIVE, txn);
-    std::cout << req->mode_ << std::endl;
-    d->push_back(*req);
 
-    lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+    // If deque empty, push lock req
+    if (lock_table_[key]->size() == 0) {
+        lock_table_[key]->push_back(*req);
+    }
 
-    std::cout << "SIZE : " << lock_table_[key]->size() << std::endl;
+    // if key already in the table, return false
+    if (lock_table_.find(key) != lock_table_.end()) {
+        // Track all txns still waiting on acquiring at least one lock
+        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
+        return false;
+    }
+
+    lock_table_[key]->push_back(*req);
     return true;
 }
 
@@ -39,8 +48,15 @@ void LockManagerA::Release(Txn* txn, const Key& key) {
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
   //
   // Implement this method!
-  std::cout << "OWNER: " << owners->size() << std::endl;
-  return UNLOCKED;
+    auto req = lock_table_[key];
+
+    // Clear all elements in owners
+    owners->clear();
+    for (unsigned int i = 0; i < req->size(); i++) {
+        owners->push_back(req->at(i).txn_);
+    }
+
+    return req->at(0).mode_;
 }
 
 LockManagerB::LockManagerB(deque<Txn*>* ready_txns) {
