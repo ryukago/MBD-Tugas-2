@@ -252,13 +252,75 @@ void TxnProcessor::ApplyWrites(Txn* txn) {
   }
 }
 
+bool TxnProcessor::OCCValidateTxn(const Txn &txn) const{
+  for (auto&& key : txn.readset_){
+    if(txn.occ_start_time_ < storage_->Timestamp(key)) return false;
+  }
+  for (auto&& key : txn.writeset_){
+    if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
+  }
+  return true;
+}
+
+void TxnProcessor::OCCCommit(Txn *txn){
+  ApplyWrites(txn);
+  txn->status_ = COMMITTED;
+}
+
+void TxnProcessor::OCCCleanUp(Txn *txn){
+  txn->reads_.empty();
+  txn->writes_.empty();
+  txn->status_ = INCOMPLETE;
+}
+
+void TxnProcessor::OCCRestart(Txn *txn){
+  mutex_.Lock();
+  txn->unique_id_ = next_unique_id_;
+  next_unique_id_++;
+  txn_requests_.Push(txn);
+  mutex_.Unlock();
+}
+
+void TxnProcessor::OCCValidationPhase(){
+  Txn * txn;
+  while (completed_txns_.Pop(&txn)){
+    if(txn->Status()==COMPLETED_A){
+      txn->status_ = ABORTED;
+    }
+    else{
+      //Validation phase
+      if(OCCValidateTxn(*txn)){
+        //Commit transaction
+        OCCCommit(txn);
+      }
+      else{
+        //Clean Up and Restart trasaction
+        OCCCleanUp(txn);
+        OCCRestart(txn);
+      }
+    }
+    txn_results_.Push(txn);
+  }
+}
+
 void TxnProcessor::RunOCCScheduler() {
   //
   // Implement this method!
   //
   // [For now, run serial scheduler in order to make it through the test
   // suite]
-
+  while (tp_.Active()){
+    Txn *txn;
+    if (txn_requests_.Pop(&txn)){
+      // Start txn running in its own thread.
+      tp_.RunTask(new Method<TxnProcessor, void, Txn*>(
+            this,
+            &TxnProcessor::ExecuteTxn,
+            txn));
+    }
+    //Validation Phase
+    OCCValidationPhase();
+  }
   RunSerialScheduler();
 }
 
