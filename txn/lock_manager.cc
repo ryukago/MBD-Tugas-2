@@ -11,7 +11,18 @@ LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
 bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
   //
   // Implement this method!
-  return true;
+    deque<LockRequest> *d = new deque<LockRequest>;
+
+    /* LockRequest req(EXCLUSIVE, txn); */
+    /* d->push_back(req); */
+    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
+    std::cout << req->mode_ << std::endl;
+    d->push_back(*req);
+
+    lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+
+    std::cout << "SIZE : " << lock_table_[key]->size() << std::endl;
+    return true;
 }
 
 bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
@@ -28,6 +39,7 @@ void LockManagerA::Release(Txn* txn, const Key& key) {
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
   //
   // Implement this method!
+  std::cout << "OWNER: " << owners->size() << std::endl;
   return UNLOCKED;
 }
 
