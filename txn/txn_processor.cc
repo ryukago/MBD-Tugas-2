@@ -288,8 +288,8 @@ void TxnProcessor::RunMVCCScheduler() {
             &TxnProcessor::MVCCExecuteTxn,
             txn));
     }
-    MVCCExecuteFinishedTxn();
   }
+  MVCCExecuteFinishedTxn();
 
 }
 
