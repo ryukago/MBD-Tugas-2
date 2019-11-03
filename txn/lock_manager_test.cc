@@ -190,6 +190,6 @@ int main(int argc, char** argv) {
   LockManagerA_SimpleLocking();
   LockManagerA_LocksReleasedOutOfOrder();
   LockManagerB_SimpleLocking();
-  /* LockManagerB_LocksReleasedOutOfOrder(); */
+  LockManagerB_LocksReleasedOutOfOrder();
 }
 

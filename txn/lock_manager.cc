@@ -3,6 +3,7 @@
 // 'The Case for Determinism in Database Systems'.
 
 #include <algorithm>
+#include <set>
 #include "txn/lock_manager.h"
 
 using std::cout;
@@ -126,21 +127,29 @@ bool LockManagerB::ReadLock(Txn* txn, const Key& key) {
 }
 
 void LockManagerB::Release(Txn* txn, const Key& key) {
-    if (find(ready_txns_->begin(), ready_txns_->end(), txn) != ready_txns_->end()) {
-        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
-            if (it->txn_ == txn) {
-                it = lock_table_[key]->erase(it);
-            } else {
-                it++;
-            }
+    for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+        if (it->txn_ == txn) {
+            it = lock_table_[key]->erase(it);
+        } else {
+            it++;
         }
-        ready_txns_->push_back(lock_table_[key]->front().txn_);
-    } else {
-        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
-            if (it->txn_ == txn) {
-                it = lock_table_[key]->erase(it);
+    }
+
+    std::set<Txn *> sets;
+    for (unsigned int i = 0; i < ready_txns_->size(); i++) {
+        sets.insert(ready_txns_->at(i));
+    }
+
+    bool shared = false;
+    for (unsigned int i = 0; i < lock_table_[key]->size(); i++) {
+        auto a = sets.find(lock_table_[key]->at(i).txn_);
+        if (*a != lock_table_[key]->at(i).txn_) {
+            if (lock_table_[key]->at(i).mode_ == EXCLUSIVE && !shared) {
+                ready_txns_->push_back(lock_table_[key]->at(i).txn_);
+                break;
             } else {
-                it++;
+                ready_txns_->push_back(lock_table_[key]->at(i).txn_);
+                shared = true;
             }
         }
     }
