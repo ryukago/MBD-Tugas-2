@@ -2,10 +2,12 @@
 // Lock manager implementing deterministic two-phase locking as described in
 // 'The Case for Determinism in Database Systems'.
 
+#include <algorithm>
 #include "txn/lock_manager.h"
 
 using std::cout;
 using std::endl;
+using std::find;
 
 LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
   ready_txns_ = ready_txns;
@@ -43,8 +45,27 @@ bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
 
 void LockManagerA::Release(Txn* txn, const Key& key) {
   // Pop the first element of lock_table and push the next one to ready_txns
-  lock_table_[key]->pop_front();
-  ready_txns_->push_back(lock_table_[key]->front().txn_);
+  /* lock_table_[key]->pop_front(); */
+
+    if (find(ready_txns_->begin(), ready_txns_->end(), txn) != ready_txns_->end()) {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
+        ready_txns_->push_back(lock_table_[key]->front().txn_);
+    } else {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
+
+    }
 }
 
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
