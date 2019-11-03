@@ -4,6 +4,9 @@
 
 #include "txn/lock_manager.h"
 
+using std::cout;
+using std::endl;
+
 LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
   ready_txns_ = ready_txns;
 }
@@ -19,9 +22,7 @@ bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
     LockRequest* req = new LockRequest(EXCLUSIVE, txn);
 
     // If deque empty, push lock req
-    if (lock_table_[key]->size() == 0) {
-        lock_table_[key]->push_back(*req);
-    }
+    lock_table_[key]->push_back(*req);
 
     // if key already in the table, return false
     if (lock_table_.find(key) != lock_table_.end()) {
@@ -41,27 +42,17 @@ bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
 }
 
 void LockManagerA::Release(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
+  // Pop the first element of lock_table and push the next one to ready_txns
+  lock_table_[key]->pop_front();
+  ready_txns_->push_back(lock_table_[key]->front().txn_);
 }
 
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
-  //
-  // Implement this method!
-    auto req = lock_table_[key];
-
     // Clear all elements in owners
     owners->clear();
-    for (unsigned int i = 0; i < req->size(); i++) {
-        owners->push_back(req->at(i).txn_);
-    }
+    owners->push_back(ready_txns_->back());
 
-    for (unsigned int i = 0; i < req->size(); i++) {
-        if (req->at(i).mode_ == EXCLUSIVE) {
-            if (i == 0) return EXCLUSIVE;
-            else return UNLOCKED;
-        }
-    }
+    if (owners->size() > 0) return EXCLUSIVE;
     return UNLOCKED;
 }
 
