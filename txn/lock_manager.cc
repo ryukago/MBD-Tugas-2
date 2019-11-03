@@ -44,9 +44,6 @@ bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
 }
 
 void LockManagerA::Release(Txn* txn, const Key& key) {
-  // Pop the first element of lock_table and push the next one to ready_txns
-  /* lock_table_[key]->pop_front(); */
-
     if (find(ready_txns_->begin(), ready_txns_->end(), txn) != ready_txns_->end()) {
         for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
             if (it->txn_ == txn) {
@@ -64,7 +61,6 @@ void LockManagerA::Release(Txn* txn, const Key& key) {
                 it++;
             }
         }
-
     }
 }
 
@@ -82,25 +78,92 @@ LockManagerB::LockManagerB(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerB::WriteLock(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
-  return true;
+    // Search if key has been added to table
+    if (lock_table_.find(key) == lock_table_.end()) { // not found
+        deque<LockRequest> *d = new deque<LockRequest>;
+
+        lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+    }
+
+    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
+
+    // If deque empty, push lock req
+    lock_table_[key]->push_back(*req);
+
+    // if key already in the table, return false
+    if (lock_table_.find(key) != lock_table_.end()) {
+        // Track all txns still waiting on acquiring at least one lock
+        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
+        return false;
+    }
+
+    lock_table_[key]->push_back(*req);
+    return true;
 }
 
 bool LockManagerB::ReadLock(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
-  return true;
+    // Search if key has been added to table
+    if (lock_table_.find(key) == lock_table_.end()) { // not found
+        deque<LockRequest> *d = new deque<LockRequest>;
+
+        lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+    }
+
+    LockRequest* req = new LockRequest(SHARED, txn);
+
+    // If deque empty, push lock req
+    lock_table_[key]->push_back(*req);
+
+    // if key already in the table, return false
+    if (lock_table_.find(key) != lock_table_.end()) {
+        // Track all txns still waiting on acquiring at least one lock
+        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
+        return false;
+    }
+
+    lock_table_[key]->push_back(*req);
+    return true;
 }
 
 void LockManagerB::Release(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
+    if (find(ready_txns_->begin(), ready_txns_->end(), txn) != ready_txns_->end()) {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
+        ready_txns_->push_back(lock_table_[key]->front().txn_);
+    } else {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
+    }
 }
 
 LockMode LockManagerB::Status(const Key& key, vector<Txn*>* owners) {
-  //
-  // Implement this method!
-  return UNLOCKED;
+    LockMode lm = UNLOCKED;
+
+    owners->clear();
+    for (unsigned int i = 0; i < lock_table_[key]->size(); i++) {
+        if (lock_table_[key]->at(i).mode_ == EXCLUSIVE) {
+            if (lm != SHARED) {
+                owners->push_back(lock_table_[key]->at(i).txn_);
+                return EXCLUSIVE;
+            } else {
+                return lm;
+            }
+        } else {
+            owners->push_back(lock_table_[key]->at(i).txn_);
+            lm = SHARED;
+        }
+    }
+
+    return lm;
 }
 
