@@ -253,23 +253,14 @@ void TxnProcessor::ApplyWrites(Txn* txn) {
 }
 
 bool TxnProcessor::OCCValidateTxn(const Txn &txn) const{
-  bool validate = true;
   //Check
   for (auto&& key : txn.readset_){
-    if (txn.occ_start_time_ < storage_->Timestamp(key)){
-      validate = false;
-      break;
-    }
+    if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
   }
-  if (!validate){
-    for (auto&& key : txn.writeset_){
-      if (txn.occ_start_time_ < storage_->Timestamp(key)){
-        validate = false;
-        break;
-      }
-    }
+  for (auto&& key : txn.writeset_){
+    if (txn.occ_start_time_<storage_->Timestamp(key)) return false;
   }
-  return validate;
+  return true;
 }
 
 void TxnProcessor::RunOCCScheduler() {
