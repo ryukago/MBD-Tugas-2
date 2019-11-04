@@ -80,7 +80,7 @@ void Benchmark(const vector<LoadGen*>& lg) {
 
   // For each MODE...
   for (CCMode mode = LOCKING_EXCLUSIVE_ONLY;
-      mode <= LOCKING_EXCLUSIVE_ONLY;
+      mode <= MVCC;
       mode = static_cast<CCMode>(mode+1)) {
     // Only Serial Locking, OCC & MVCC
     if (mode != LOCKING_EXCLUSIVE_ONLY && mode !=OCC && mode !=MVCC) continue;
