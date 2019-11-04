@@ -252,13 +252,53 @@ void TxnProcessor::ApplyWrites(Txn* txn) {
   }
 }
 
-void TxnProcessor::RunOCCScheduler() {
-  //
-  // Implement this method!
-  //
-  // [For now, run serial scheduler in order to make it through the test
-  // suite]
+bool TxnProcessor::OCCValidateTxn(const Txn &txn) const{
+  //Check
+  for (auto&& key : txn.readset_){
+    if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
+  }
+  for (auto&& key : txn.writeset_){
+    if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
+  }
+  return true;
+}
 
+void TxnProcessor::RunOCCScheduler() {
+  Txn * txn;
+  while (tp_.Active()){
+    if (txn_requests_.Pop(&txn)){
+      // Start txn running in its own thread.
+      tp_.RunTask(new Method<TxnProcessor, void, Txn*>(
+            this,
+            &TxnProcessor::ExecuteTxn,
+            txn));
+    }
+
+    //Validation Phase
+    while(completed_txns_.Pop(&txn)){
+      if(txn->Status()==COMPLETED_A) txn->status_ = ABORTED;
+      else{
+        if (OCCValidateTxn(*txn)){
+          // Commit transaction
+          ApplyWrites(txn);
+          txn->status_ = COMMITTED;
+          txn_results_.Push(txn);
+        } else {
+          // Clean Up
+          txn->reads_.empty();
+          txn->writes_.empty();
+          txn->status_ = INCOMPLETE;
+
+          //Restart
+          mutex_.Lock();
+          txn->unique_id_ = next_unique_id_;
+          next_unique_id_++;
+          txn_requests_.Push(txn);
+          mutex_.Unlock();
+        }
+      }
+    }
+  }
   RunSerialScheduler();
 }
 

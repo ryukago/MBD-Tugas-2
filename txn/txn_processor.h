@@ -72,18 +72,8 @@ class TxnProcessor {
   // Locking version of scheduler.
   void RunLockingScheduler();
 
-  void OCCValidationPhase();
   // Valdiate the txn
   bool OCCValidateTxn(const Txn &txn) const;
-
-  // Commit the validated transaction
-  void OCCCommit(Txn *txn);
-
-  // Cleanup transaction
-  void OCCCleanUp(Txn *txn);
-
-  // Restart transaction
-  void OCCRestart(Txn *txn);
 
   // OCC version of scheduler.
   void RunOCCScheduler();
