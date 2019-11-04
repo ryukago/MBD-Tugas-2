@@ -1,10 +1,16 @@
 
 // Lock manager implementing deterministic two-phase locking as described in
 // 'The Case for Determinism in Database Systems'.
+
+#include <algorithm>
 #include <deque>
+#include <set>
 #include "txn/lock_manager.h"
 
+using std::cout;
 using std::deque;
+using std::endl;
+using std::find;
 
 LockManager::~LockManager() {
   for (unordered_map<Key, deque<LockRequest>*>::iterator it = lock_table_.begin(); it != lock_table_.end(); it++) {
@@ -17,27 +23,26 @@ LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
-  LockRequest lock(EXCLUSIVE, txn);
-  deque<LockRequest> *locks = lock_table_[key];
-  bool succeed;
-  if (!locks) {
-    locks = new deque<LockRequest>();
-    lock_table_[key] = locks;
-    succeed = true;
-  }
-  else {
-    if (locks->empty()) {
-      succeed = true;
+    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
+
+    // Search if key has been added to table
+    if (lock_table_.find(key) == lock_table_.end()) { // not found
+        deque<LockRequest> *d = new deque<LockRequest>;
+
+        lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
+    } else {
+        if (lock_table_[key]->empty()) {
+            lock_table_[key]->push_back(*req);
+            return true;
+        } else {
+            txn_waits_[txn]++;
+            lock_table_[key]->push_back(*req);
+            return false;
+        }
     }
-    else {
-      txn_waits_[txn]++;
-      succeed = false;
-    }
-  }
-  locks-> push_back(lock);
-  return succeed;
+
+    lock_table_[key]->push_back(*req);
+    return true;
 }
 
 bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
@@ -47,50 +52,127 @@ bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
 }
 
 void LockManagerA::Release(Txn* txn, const Key& key) {
-  //
-  // Implement this method!
-  deque<LockRequest> *locks = lock_table_[key];
-  if (!locks) {
-    locks = new deque<LockRequest>();
-    lock_table_[key] = locks;
-  }
-  bool remove_owner = true;
-  if (locks) {
-    for (deque<LockRequest>::iterator it = locks->begin(); it < locks->end(); it++) {
-      if (it->txn_ == txn) {
-        locks->erase(it);
-        break;
-      }
-      remove_owner = false;
+    if (find(ready_txns_->begin(), ready_txns_->end(), txn) != ready_txns_->end()) {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
+        ready_txns_->push_back(lock_table_[key]->front().txn_);
+    } else {
+        for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) {
+            if (it->txn_ == txn) {
+                it = lock_table_[key]->erase(it);
+            } else {
+                it++;
+            }
+        }
     }
-
-    if ((!locks->empty()) && (remove_owner)) {
-      LockRequest next_lock = locks->front();
-
-      if (--txn_waits_[next_lock.txn_] == 0) {
-        ready_txns_->push_back(next_lock.txn_);
-        txn_waits_.erase(next_lock.txn_);
-      }
-    }
-  }
 }
 
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
-  //
-  // Implement this method!
-  deque<LockRequest> *locks = lock_table_[key];
-  if (!locks) {
-    locks = new deque<LockRequest>();
-    lock_table_[key] = locks;
-  }
+    // Clear all elements in owners
+    owners->clear();
+    owners->push_back(ready_txns_->back());
 
-  if (locks->empty()) {
-   return UNLOCKED;
-  }
-  else {
-    vector<Txn*> owners_new;
-    owners_new.push_back(locks->front().txn_);
-    *owners = owners_new;
-    return EXCLUSIVE;
-  }
+    if (owners->size() > 0) return EXCLUSIVE;
+    return UNLOCKED;
 }
+
+/* bool LockManagerB::WriteLock(Txn* txn, const Key& key) { */
+/*         LockRequest* req = new LockRequest(EXCLUSIVE, txn); */
+
+/*     // Search if key has been added to table */
+/*     if (lock_table_.find(key) == lock_table_.end()) { // not found */
+/*         deque<LockRequest> *d = new deque<LockRequest>; */
+
+/*         lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d)); */
+/*     } else { */
+/*         if (lock_table_[key]->empty()) { */
+/*             lock_table_[key]->push_back(*req); */
+/*             return true; */
+/*         } else { */
+/*             txn_waits_[txn]++; */
+/*             lock_table_[key]->push_back(*req); */
+/*             return false; */
+/*         } */
+/*     } */
+
+/*     lock_table_[key]->push_back(*req); */
+/*     return true; */
+/* } */
+
+/* bool LockManagerB::ReadLock(Txn* txn, const Key& key) { */
+/*     LockRequest* req = new LockRequest(SHARED, txn); */
+
+/*     // Search if key has been added to table */
+/*     if (lock_table_.find(key) == lock_table_.end()) { // not found */
+/*         deque<LockRequest> *d = new deque<LockRequest>; */
+
+/*         lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d)); */
+/*     } else { */
+/*         if (lock_table_[key]->empty()) { */
+/*             lock_table_[key]->push_back(*req); */
+/*             return true; */
+/*         } else { */
+/*             txn_waits_[txn]++; */
+/*             lock_table_[key]->push_back(*req); */
+/*             return false; */
+/*         } */
+/*     } */
+
+/*     lock_table_[key]->push_back(*req); */
+/*     return true; */
+/* } */
+
+/* void LockManagerB::Release(Txn* txn, const Key& key) { */
+/*     for (auto it = lock_table_[key]->begin(); it < lock_table_[key]->end(); ) { */
+/*         if (it->txn_ == txn) { */
+/*             it = lock_table_[key]->erase(it); */
+/*         } else { */
+/*             it++; */
+/*         } */
+/*     } */
+
+/*     std::set<Txn *> sets; */
+/*     for (unsigned int i = 0; i < ready_txns_->size(); i++) { */
+/*         sets.insert(ready_txns_->at(i)); */
+/*     } */
+
+/*     bool shared = false; */
+/*     for (unsigned int i = 0; i < lock_table_[key]->size(); i++) { */
+/*         auto a = sets.find(lock_table_[key]->at(i).txn_); */
+/*         if (*a != lock_table_[key]->at(i).txn_) { */
+/*             if (lock_table_[key]->at(i).mode_ == EXCLUSIVE && !shared) { */
+/*                 ready_txns_->push_back(lock_table_[key]->at(i).txn_); */
+/*                 break; */
+/*             } else { */
+/*                 ready_txns_->push_back(lock_table_[key]->at(i).txn_); */
+/*                 shared = true; */
+/*             } */
+/*         } */
+/*     } */
+/* } */
+
+/* LockMode LockManagerB::Status(const Key& key, vector<Txn*>* owners) { */
+/*     LockMode lm = UNLOCKED; */
+
+/*     owners->clear(); */
+/*     for (unsigned int i = 0; i < lock_table_[key]->size(); i++) { */
+/*         if (lock_table_[key]->at(i).mode_ == EXCLUSIVE) { */
+/*             if (lm != SHARED) { */
+/*                 owners->push_back(lock_table_[key]->at(i).txn_); */
+/*                 return EXCLUSIVE; */
+/*             } else { */
+/*                 return lm; */
+/*             } */
+/*         } else { */
+/*             owners->push_back(lock_table_[key]->at(i).txn_); */
+/*             lm = SHARED; */
+/*         } */
+/*     } */
+
+/*     return lm; */
+/* } */
