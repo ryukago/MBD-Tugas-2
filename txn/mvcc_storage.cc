@@ -5,7 +5,7 @@
 
 // Init the storage
 void MVCCStorage::InitStorage() {
-  for (int i = 0; i < 1000000;i++) {
+  for (int i = 0; i < 100000;i++) {
     Write(i, 0, 0);
     Mutex* key_mutex = new Mutex();
     mutexs_[i] = key_mutex;
@@ -14,8 +14,11 @@ void MVCCStorage::InitStorage() {
 
 // Free memory.
 MVCCStorage::~MVCCStorage() {
-  for (unordered_map<Key, deque<Version*>*>::iterator it = mvcc_data_.begin();
-       it != mvcc_data_.end(); ++it) {
+  for (unordered_map<Key, deque<Version*>*>::iterator it = mvcc_data_.begin(); it != mvcc_data_.end(); ++it) {
+    while ((!(it->second)->empty())) {
+      delete (it->second)->front();
+      (it->second)->pop_front();
+    }
     delete it->second;
   }
 

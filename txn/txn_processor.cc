@@ -303,7 +303,6 @@ void TxnProcessor::RunOCCScheduler() {
 }
 
 void TxnProcessor::RunOCCParallelScheduler() {
-  //
   // Implement this method! Note that implementing OCC with parallel
   // validation may need to create another method, like
   // TxnProcessor::ExecuteTxnParallel.
@@ -316,7 +315,6 @@ void TxnProcessor::RunOCCParallelScheduler() {
 }
 
 void TxnProcessor::RunMVCCScheduler() {
-  //
   // Implement this method!
   // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute.
   // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn.
@@ -328,34 +326,10 @@ void TxnProcessor::RunMVCCScheduler() {
             &TxnProcessor::MVCCExecuteTxn,
             txn));
     }
-    MVCCExecuteFinishedTxn();
-  }
-
-}
-
-void TxnProcessor::MVCCExecuteFinishedTxn() {
-  Txn* txn;
-  while (completed_txns_.Pop(&txn)) {
-    MVCCLockWriteKeys(txn);
-    if (MVCCCheckWrites(txn)) {
-      ApplyWrites(txn);
-      // Release all write locks that already acquired
-      MVCCUnlockWriteKeys(txn);
-      txn->status_ = COMMITTED;
-    }
-    else {
-      // Release all write locks that already acquired
-      MVCCUnlockWriteKeys(txn);
-      txn->status_ = INCOMPLETE;
-      CleanupTxn(txn);
-      RestartTxn(txn);
-    }
-    txn_results_.Push(txn);
   }
 }
 
 void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
-
   // Read all necessary data for this transaction from storage (Note that you should lock the key before each read)
   for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
     // Save each read result iff record exists in storage.
@@ -382,8 +356,20 @@ void TxnProcessor::MVCCExecuteTxn(Txn* txn) {
   // Execute the transaction logic (i.e. call Run() on the transaction)
   txn->Run();
 
-  // Hand the txn back to the RunScheduler thread.
-  completed_txns_.Push(txn);
+  MVCCLockWriteKeys(txn);
+  if (MVCCCheckWrites(txn)) {
+    ApplyWrites(txn);
+    // Release all write locks that already acquired
+    MVCCUnlockWriteKeys(txn);
+    txn->status_ = COMMITTED;
+    txn_results_.Push(txn);
+  }
+  else {
+    // Release all write locks that already acquired
+    MVCCUnlockWriteKeys(txn);
+    CleanupTxn(txn);
+    RestartTxn(txn);
+  }
 }
 
 bool TxnProcessor::MVCCCheckWrites(Txn* txn) {
@@ -407,10 +393,6 @@ void TxnProcessor::MVCCUnlockWriteKeys(Txn* txn) {
     Key key = *it;
     storage_->Unlock(key);
   }
-}
-
-void TxnProcessor::GarbageCollection() {
-
 }
 
 void TxnProcessor::CleanupTxn(Txn* txn) {
