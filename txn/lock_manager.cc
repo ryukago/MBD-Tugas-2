@@ -15,23 +15,22 @@ LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
+    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
+
     // Search if key has been added to table
     if (lock_table_.find(key) == lock_table_.end()) { // not found
         deque<LockRequest> *d = new deque<LockRequest>;
 
         lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
-    }
-
-    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
-
-    // If deque empty, push lock req
-    lock_table_[key]->push_back(*req);
-
-    // if key already in the table, return false
-    if (lock_table_.find(key) != lock_table_.end()) {
-        // Track all txns still waiting on acquiring at least one lock
-        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
-        return false;
+    } else {
+        if (lock_table_[key]->empty()) {
+            lock_table_[key]->push_back(*req);
+            return true;
+        } else {
+            txn_waits_[txn]++;
+            lock_table_[key]->push_back(*req);
+            return false;
+        }
     }
 
     lock_table_[key]->push_back(*req);
@@ -79,23 +78,22 @@ LockManagerB::LockManagerB(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerB::WriteLock(Txn* txn, const Key& key) {
+        LockRequest* req = new LockRequest(EXCLUSIVE, txn);
+
     // Search if key has been added to table
     if (lock_table_.find(key) == lock_table_.end()) { // not found
         deque<LockRequest> *d = new deque<LockRequest>;
 
         lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
-    }
-
-    LockRequest* req = new LockRequest(EXCLUSIVE, txn);
-
-    // If deque empty, push lock req
-    lock_table_[key]->push_back(*req);
-
-    // if key already in the table, return false
-    if (lock_table_.find(key) != lock_table_.end()) {
-        // Track all txns still waiting on acquiring at least one lock
-        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
-        return false;
+    } else {
+        if (lock_table_[key]->empty()) {
+            lock_table_[key]->push_back(*req);
+            return true;
+        } else {
+            txn_waits_[txn]++;
+            lock_table_[key]->push_back(*req);
+            return false;
+        }
     }
 
     lock_table_[key]->push_back(*req);
@@ -103,23 +101,22 @@ bool LockManagerB::WriteLock(Txn* txn, const Key& key) {
 }
 
 bool LockManagerB::ReadLock(Txn* txn, const Key& key) {
+    LockRequest* req = new LockRequest(SHARED, txn);
+
     // Search if key has been added to table
     if (lock_table_.find(key) == lock_table_.end()) { // not found
         deque<LockRequest> *d = new deque<LockRequest>;
 
         lock_table_.insert(std::pair<int, deque<LockRequest>*>(key, d));
-    }
-
-    LockRequest* req = new LockRequest(SHARED, txn);
-
-    // If deque empty, push lock req
-    lock_table_[key]->push_back(*req);
-
-    // if key already in the table, return false
-    if (lock_table_.find(key) != lock_table_.end()) {
-        // Track all txns still waiting on acquiring at least one lock
-        txn_waits_.insert(std::pair<Txn*, int>(txn, key));
-        return false;
+    } else {
+        if (lock_table_[key]->empty()) {
+            lock_table_[key]->push_back(*req);
+            return true;
+        } else {
+            txn_waits_[txn]++;
+            lock_table_[key]->push_back(*req);
+            return false;
+        }
     }
 
     lock_table_[key]->push_back(*req);
