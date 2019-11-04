@@ -258,7 +258,7 @@ bool TxnProcessor::OCCValidateTxn(const Txn &txn) const{
     if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
   }
   for (auto&& key : txn.writeset_){
-    if (txn.occ_start_time_ < storage_->Timestamp(key)) return false;
+    if (txn.occ_start_time_<storage_->Timestamp(key)) return false;
   }
   return true;
 }
