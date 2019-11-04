@@ -258,12 +258,14 @@ bool TxnProcessor::OCCValidateTxn(const Txn &txn) const{
   for (auto&& key : txn.readset_){
     if (txn.occ_start_time_ < storage_->Timestamp(key)){
       validate = false;
+      break;
     }
   }
   if (!validate){
     for (auto&& key : txn.writeset_){
       if (txn.occ_start_time_ < storage_->Timestamp(key)){
         validate = false;
+        break;
       }
     }
   }
