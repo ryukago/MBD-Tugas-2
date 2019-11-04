@@ -1,0 +1,48 @@
+== bin/txn/lock_manager_test ==
+[ LockManagerA_SimpleLocking ] BEGIN
+[ LockManagerA_SimpleLocking ] PASS
+[ LockManagerA_LocksReleasedOutOfOrder ] BEGIN
+[ LockManagerA_LocksReleasedOutOfOrder ] PASS
+== bin/txn/txn_processor_test ==
+                            Average Transaction Duration
+                0.1ms           1ms             10ms
+'Low contention' Read only (5 records)
+ SLocking       27320.1         5887.79         619.879
+ OCC            45826.2         5884.64         598.543
+ MVCC           45059.9         5873.98         613.243
+'Low contention' Read only (20 records)
+ SLocking       13951.9         5296.09         595.656
+ OCC            25284.7         5514.06         598.855
+ MVCC           23432.8         5331.45         620.191
+'High contention' Read only (5 records)
+ SLocking       19001.9         4773            499.768
+ OCC            46646.6         5866.86         612.699
+ MVCC           45165.3         5861.66         626.188
+'High contention' Read only (20 records)
+ SLocking       2460.07         903.673         127.038
+ OCC            22744.8         5333.18         574.841
+ MVCC           21703.6         5283.43         627.582
+Low contention read-write (5 records)
+ SLocking       20434.2         5718.38         595.749
+ OCC            40867.5         5781.37         605.911
+ MVCC           35030.4         5619.4          594.579
+Low contention read-write (10 records)
+ SLocking       12956           5443.4          604.718
+ OCC            29794.4         5296.5          553.971
+ MVCC           23955.6         5149.13         595.837
+High contention read-write (1 records)
+ SLocking       9982.14         3253.12         344.502
+ OCC            19954.2         2434.95         247.928
+ MVCC           2924.87         1266.23         142.822
+High contention read-write (5 records)
+ SLocking       15173.4         4498.91         506.838
+ OCC            18518.4         2552.9          250.286
+ MVCC           3046.03         1164.2          143.827
+High contention read-write (10 records)
+ SLocking       6692.08         2217.48         301.894
+ OCC            8011.96         1213.84         138.403
+ MVCC           1060.34         554.963         74.0532
+High contention mixed read only/read-write
+ SLocking       1868.34         747.337         116.591
+ OCC            13178.2         2745.52         302.268
+ MVCC           3067.91         2533.68         692.365
